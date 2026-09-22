@@ -1,0 +1,123 @@
+services:
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    volumes: [mongodb_data:/data/db]
+    healthcheck:
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  kafka:
+    image: apache/kafka:3.8.1
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes: [kafka_data:/tmp/kraft-combined-logs]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  identity-service:
+    build: ./identity-service
+    restart: unless-stopped
+    ports: ["3001:3001"]
+    environment:
+      PORT: 3001
+      MONGODB_URI: mongodb://mongodb:27017/identity_db
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in a root .env file}
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 7d
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CLIENT_ID: identity-service
+      KAFKA_TOPIC: identity-events
+    depends_on:
+      mongodb: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  blog-service:
+    build: ./blog-service
+    restart: unless-stopped
+    ports: ["3002:3002"]
+    environment:
+      PORT: 3002
+      MONGODB_URI: mongodb://mongodb:27017/blog_db
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in a root .env file}
+      JWT_EXPIRES_IN: 15m
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CLIENT_ID: blog-service
+      KAFKA_TOPIC: blog-events
+    depends_on:
+      mongodb: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3002/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  activity-service:
+    build: ./activity-service
+    restart: unless-stopped
+    ports: ["3003:3003"]
+    environment:
+      PORT: 3003
+      MONGODB_URI: mongodb://mongodb:27017/activity_db
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CLIENT_ID: activity-service
+      KAFKA_GROUP_ID: activity-service-group
+      KAFKA_TOPIC: identity-events,blog-events
+    depends_on:
+      mongodb: { condition: service_healthy }
+      kafka: { condition: service_healthy }
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3003/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  mongodb_data:
+  kafka_data:

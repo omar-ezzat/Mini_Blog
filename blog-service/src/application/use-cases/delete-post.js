@@ -1,0 +1,3 @@
+import { PostNotFoundError } from '../../domain/errors/post-errors.js';
+import { postEvent } from '../../domain/events/post-events.js';
+export class DeletePost { constructor({ postRepository, eventPublisher }) { Object.assign(this, { postRepository, eventPublisher }); } async execute({ id, actorId }) { const post = await this.postRepository.findById(id); if (!post) throw new PostNotFoundError(); post.assertOwnership(actorId); await this.postRepository.delete(post.id.value); await this.eventPublisher.publish(postEvent('PostDeleted', { postId: post.id.value, authorId: post.authorId, title: post.title })); } }

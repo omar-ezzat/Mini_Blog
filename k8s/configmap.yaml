@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: miniblog-config
+  namespace: miniblog
+data:
+  KAFKA_BROKERS: kafka:9092
+  IDENTITY_MONGODB_URI: mongodb://mongodb:27017/identity_db
+  BLOG_MONGODB_URI: mongodb://mongodb:27017/blog_db
+  ACTIVITY_MONGODB_URI: mongodb://mongodb:27017/activity_db
+  JWT_EXPIRES_IN: 15m
+  JWT_REFRESH_EXPIRES_IN: 7d
+  IDENTITY_KAFKA_TOPIC: identity-events
+  BLOG_KAFKA_TOPIC: blog-events
+  ACTIVITY_KAFKA_TOPIC: identity-events,blog-events
+  ACTIVITY_KAFKA_GROUP_ID: activity-service-group

@@ -1,0 +1,2 @@
+import { postResponse } from '../dto/post-response.js';
+export class ListPosts { constructor({ postRepository }) { this.postRepository = postRepository; } async execute({ page = 1, limit = 10, authorId } = {}) { const safePage = Math.max(1, Number(page) || 1); const safeLimit = Math.min(100, Math.max(1, Number(limit) || 10)); const result = await this.postRepository.list({ page: safePage, limit: safeLimit, authorId }); return { posts: result.posts.map(postResponse), page: safePage, limit: safeLimit, total: result.total, totalPages: Math.ceil(result.total / safeLimit) }; } }
