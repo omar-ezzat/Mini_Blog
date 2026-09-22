@@ -112,19 +112,23 @@ sequenceDiagram
     participant DB as identity_db
     participant B as Blog Service
 
-    C->>I: POST /auth/login
-    I->>DB: Find user; compare bcrypt hash
-    I->>DB: Store refresh-token hash + expiry
+    C->>I: POST /auth/login with email + password
+    I->>DB: Find user and compare bcrypt hash
+    I->>DB: Create refresh session with hashed token + expiry
     I-->>C: accessToken + refreshToken + safe user
-    C->>B: POST /posts with Bearer accessToken
-    B->>B: Verify JWT signature and expiry
+    C->>B: Request with Authorization: Bearer accessToken
+    B->>B: Verify JWT signature and expiry locally
     B-->>C: Authorized response
+    C->>I: POST /auth/logout with refreshToken
+    I->>DB: Remove or invalidate session by hashed token
+    I-->>C: Success response
 ```
 
 - Passwords are bcrypt hashes; plain passwords are never stored or returned.
 - Access tokens are signed JWTs and are short-lived (default: 15 minutes).
-- Refresh tokens are random secrets. MongoDB stores only a SHA-256 hash, so a database leak does not directly reveal usable refresh tokens.
-- Identity signs and Blog verifies with the same `JWT_SECRET` in this learning project.
+- Refresh tokens are opaque random secrets. Identity stores only a SHA-256 hash in MongoDB, so a database leak does not directly reveal usable refresh tokens.
+- Blog does not call Identity for every request; it verifies the access token using the same `JWT_SECRET` and authorizes the request locally.
+- Logout invalidates the refresh-token session in Identity, which is how a client can end a session without exposing the raw token.
 
 ## Event flow
 
